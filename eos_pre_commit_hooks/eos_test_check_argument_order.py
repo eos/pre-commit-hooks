@@ -23,6 +23,14 @@ def eos_test_check_argument_order(
             re.compile(r'TEST_CHECK_NEARLY_EQUAL\(\s*[+-]?[0-9]+[.]?[0-9]*([e][+-]?[0-9]+)?\s*,'),
             'TEST_CHECK_NEARLY_EQUAL() expects arguments in the order: actual value, expected value, tolerance'
         ),
+        (
+            re.compile(r'TEST_CHECK_RELATIVE_ERROR\(\s*[+-]?[0-9]+[.]?[0-9]*([e][+-]?[0-9]+)?\s*,'),
+            'TEST_CHECK_RELATIVE_ERROR() expects arguments in the order: actual value, expected value, tolerance'
+        ),
+        (
+            re.compile(r'TEST_CHECK_RELATIVE_ERROR_C\(\s*[+-]?[0-9]+[.]?[0-9]*([e][+-]?[0-9]+)?\s*,'),
+            'TEST_CHECK_RELATIVE_ERROR_C() expects arguments in the order: actual value, expected value, tolerance'
+        ),
     ]
 
     for filename in filenames_filtered:
