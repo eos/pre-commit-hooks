@@ -1,0 +1,6 @@
+-   id: eos-test-check-argument-order
+    name: 'EOS: TEST_CHECK_* arguments order'
+    description: Checks if the arguments of TEST_CHECK_* macros are in the correct order
+    entry: eos-test-check-argument-order
+    language: python
+    types: [text]
