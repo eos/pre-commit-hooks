@@ -4,3 +4,9 @@
     entry: eos-test-check-argument-order
     language: python
     types: [text]
+-   id: eos-test-ordereddict-usage
+    name: 'EOS: OrderedDict usage'
+    description: Checks if OrderedDict is imported, as it likely isn't needed
+    entry: eos-test-ordereddict-usage
+    language: python
+    types: [text]
