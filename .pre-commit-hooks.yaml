@@ -8,5 +8,9 @@
     name: 'EOS: OrderedDict usage'
     description: Checks if OrderedDict is imported, as it likely isn't needed
     entry: eos-test-ordereddict-usage
+-   id: eos-test-check-references
+    name: 'EOS: Check EOS references'
+    description: Checks if references mentioned in the EOS source code are well formed and appear in the references.yaml file
+    entry: eos-test-check-references
     language: python
     types: [text]
