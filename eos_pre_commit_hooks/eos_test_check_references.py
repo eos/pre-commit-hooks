@@ -15,24 +15,25 @@ def eos_test_check_references(
     retv = 0
     filenames_filtered = set(filenames)
 
-    # each check is a tuple of regular expression and error message
+    # each check is a tuple of regular expression and error message, designed to catch typical mistakes
     checks = [
         (
-            re.compile(r'\[[a-zA-Z]+[0-9]{4}\]'),
+            re.compile(r'\[[a-zA-Z0-9][a-zA-Z0-9+-]*[0-9]{4}\]'),
             'needs a colon and a final letter after year to be a correctly formatted reference'
         ),
         (
-            re.compile(r'\[[a-zA-Z]+[0-9]{4}[A-Z]\]'),
+            re.compile(r'\[[a-zA-Z0-9][a-zA-Z0-9+-]*[0-9]{4}[A-Z]\]'),
             'needs a colon to be a correctly formatted reference'
         ),
         (
-            re.compile(r'\[[a-zA-Z]+:[0-9]{4}\]'),
+            re.compile(r'\[[a-zA-Z0-9][a-zA-Z0-9+-]*:[0-9]{4}\]'),
             'needs a final letter to be a correctly formatted reference'
         ),
     ]
 
     # regexp for correctly formed reference
-    good_reference_regexp = re.compile(r'\[[a-zA-Z]+:[0-9]{4}[A-Z]\]')
+    # See eos/utils/reference-name.cc
+    good_reference_regexp = re.compile(r'\[[a-zA-Z0-9][a-zA-Z0-9+-]*:[0-9]{4}[A-Z]\]')
 
     # Read in all references from references.yaml
     known_refs = set()
