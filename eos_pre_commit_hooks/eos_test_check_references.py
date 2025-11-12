@@ -5,6 +5,7 @@ import math
 import os
 import re
 import subprocess
+import yaml
 from typing import Sequence
 
 def eos_test_check_references(
@@ -33,13 +34,12 @@ def eos_test_check_references(
 
     # regexp for correctly formed reference
     # See eos/utils/reference-name.cc
-    good_reference_regexp = re.compile(r'\[[a-zA-Z0-9][a-zA-Z0-9+-]*:[0-9]{4}[A-Z]\]')
+    # Use capturing group to get only the reference, not the external square brackets
+    good_reference_regexp = re.compile(r'\[([a-zA-Z0-9][a-zA-Z0-9+-]*:[0-9]{4}[A-Z])\]')
 
     # Read in all references from references.yaml
-    known_refs = set()
     with open("eos/references.yaml") as f:
-        for line in f:
-            known_refs.update(good_reference_regexp.findall(line))
+        known_refs = set(yaml.safe_load(f))
 
 
     for filename in filenames_filtered:
