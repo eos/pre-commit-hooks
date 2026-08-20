@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import io
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import ScalarString
 
 from . import alignment, floats, layout, render, strings
-from .model import FieldSpec
+from .model import AlignmentPlan, FieldSpec
 
 INDENT = 2
 MIXTURE = 'Mixture'
@@ -332,7 +332,7 @@ def _append_comments(lines: list[str], eol: str | None, following: list[str]) ->
 
 # --- alignment groups -------------------------------------------------------------
 
-def _field_spec(key: str, value, arity: int) -> FieldSpec | None:
+def _field_spec(key: str, value, indent: int, arity: int) -> FieldSpec | None:
     """A vector or matrix FieldSpec for `value`, or None if it is not a candidate."""
     if not _is_sequence(value) or len(value) != arity:
         return None
@@ -340,14 +340,23 @@ def _field_spec(key: str, value, arity: int) -> FieldSpec | None:
     flow = _is_flow(value)
 
     if all(_is_cell(item, flow) for item in value):
-        return FieldSpec(key=key, kind='vector', cells=[_dump_scalar(item) for item in value])
+        return FieldSpec(key=key, kind='vector', indent=indent,
+                         cells=[_dump_scalar(item) for item in value])
 
     if all(_is_sequence(row) and all(_is_cell(cell, flow or _is_flow(row)) for cell in row)
            for row in value):
-        return FieldSpec(key=key, kind='matrix',
+        return FieldSpec(key=key, kind='matrix', indent=indent,
                          rows=[[_dump_scalar(cell) for cell in row] for row in value])
 
     return None
+
+def _specs(mapping, indent: int, arity: int) -> dict:
+    """Every key of `mapping`, mapped to its FieldSpec or to None where it is no
+    alignment candidate."""
+    if arity < 2 or not isinstance(mapping, (CommentedMap, dict)):
+        return {}
+
+    return {key: _field_spec(key, mapping[key], indent, arity) for key in mapping}
 
 def _runs(keys: list[str], specs: dict) -> list[list[str]]:
     """Maximal runs of adjacent candidate keys. Spec §4 step 1."""
@@ -374,43 +383,101 @@ def _arity(entry) -> tuple[int, list[str]]:
 
     return len(value), cells
 
+@dataclass
+class _Placement:
+    """Where one field sits in its alignment group: the group's fields, its plan,
+    and this field's own index into both."""
+    fields: list[FieldSpec]
+    plan: AlignmentPlan
+    index: int
+
+def _view(place: _Placement) -> tuple[list[FieldSpec], AlignmentPlan]:
+    """The one-field view of a group's plan, so each field renders where its key sits."""
+    plan = replace(place.plan, pad=[place.plan.pad[place.index]], included=[0], excluded=[])
+
+    return [place.fields[place.index]], plan
+
+def _mixture_components(entry):
+    """A `Mixture` entry's components, or None for any other entry. Spec §6."""
+    if entry.get('type') != MIXTURE or not _is_sequence(entry.get(COMPONENTS)):
+        return None
+
+    return entry[COMPONENTS]
+
+def _assign(members: list[tuple], observable_cells: list[str], arity: int,
+            placements: dict) -> None:
+    """Plan one alignment group and record where each of its fields ended up."""
+    fields = [spec for _, _, spec in members]
+    plan = alignment.plan_alignment(
+        fields,
+        observable_cells or [''] * arity,
+        reference_keys=REFERENCE_KEYS,
+    )
+
+    for index, (owner, key, _) in enumerate(members):
+        placements[(id(owner), key)] = _Placement(fields, plan, index)
+
+def _placements(entry, indent: int, arity: int, observable_cells: list[str]) -> dict:
+    """One plan per alignment group, keyed by the owning mapping and key.
+
+    A `Mixture` entry forms a single group spanning two indent levels: its own
+    candidates plus every component's. Spec §4 step 1, §6.
+    """
+    placements: dict = {}
+    specs = _specs(entry, indent, arity)
+
+    if not specs:
+        return placements
+
+    components = _mixture_components(entry)
+
+    if components is None:
+        for run in _runs(list(entry), specs):
+            _assign([(entry, key, specs[key]) for key in run],
+                    observable_cells, arity, placements)
+
+        return placements
+
+    members = [(entry, key, specs[key]) for key in entry if specs.get(key) is not None]
+
+    for component in components:
+        own = _specs(component, indent + 2 * INDENT, arity)
+        members.extend((component, key, own[key]) for key in own if own[key] is not None)
+
+    if members:
+        _assign(members, observable_cells, arity, placements)
+
+    return placements
+
 # --- assembly ---------------------------------------------------------------------
 
 def _entry_lines(entry, indent: int, arity: int | None = None,
-                 observable_cells: list[str] | None = None) -> list[str]:
+                 observable_cells: list[str] | None = None,
+                 placements: dict | None = None) -> list[str]:
     """One constraint entry's body, key by key, in the entry's own key order."""
     if arity is None:
         arity, observable_cells = _arity(entry)
 
-    keys = list(entry)
-    specs = {key: _field_spec(key, entry[key], arity) for key in keys} if arity > 1 else {}
-    plans = {}
+    if placements is None:
+        placements = _placements(entry, indent, arity, observable_cells)
 
-    for run in _runs(keys, specs):
-        plan = alignment.plan_alignment(
-            [specs[key] for key in run],
-            observable_cells or [''] * arity,
-            indent=indent,
-            reference_keys=REFERENCE_KEYS,
-        )
-        plans.update(dict.fromkeys(run, plan))
-
-    mixture = entry.get('type') == MIXTURE
+    components = _mixture_components(entry)
     lines = []
 
-    for key in keys:
+    for key in entry:
         lines.extend(_pre_comment_lines(entry, key))
 
+        place = placements.get((id(entry), key))
         hoisted = []
 
-        if key in plans:
-            spec, plan = specs[key], plans[key]
+        if place is not None:
             hoisted = _element_comment_lines(entry[key], indent)
-            block = (render.render_group([spec], plan, indent) if key in plan.included
-                     else render.render_self_aligned(spec, indent))
+            block = (render.render_group(*_view(place)) if place.index in place.plan.included
+                     else render.render_self_aligned(place.fields[place.index]))
             block += _end_lines(entry[key])
-        elif mixture and key == COMPONENTS and _is_sequence(entry[key]):
-            block = _component_lines(entry[key], key, indent, arity, observable_cells)
+        elif components is not None and key == COMPONENTS:
+            block = _component_lines(components, key, indent, arity, observable_cells,
+                                     placements)
         else:
             block = _key_lines(entry, key, indent)
 
@@ -420,8 +487,8 @@ def _entry_lines(entry, indent: int, arity: int | None = None,
     return lines
 
 def _component_lines(components, key: str, indent: int, arity: int,
-                     observable_cells: list[str] | None) -> list[str]:
-    """A `Mixture` entry's components, each aligned against its own fields. Spec §6."""
+                     observable_cells: list[str] | None, placements: dict) -> list[str]:
+    """A `Mixture` entry's components, sharing the entry's own alignment group. Spec §6."""
     lines = [' ' * indent + key + ':']
 
     for component in components:
@@ -429,7 +496,8 @@ def _component_lines(components, key: str, indent: int, arity: int,
             lines.extend(_indented(_dump(CommentedSeq([component])), indent + INDENT))
             continue
 
-        block = _entry_lines(component, indent + 2 * INDENT, arity, observable_cells)
+        block = _entry_lines(component, indent + 2 * INDENT, arity, observable_cells,
+                             placements)
         first = next((number for number, line in enumerate(block)
                       if line.strip() and not line.lstrip().startswith('#')), 0)
         block[first] = ' ' * (indent + INDENT) + '- ' + block[first][indent + 2 * INDENT:]

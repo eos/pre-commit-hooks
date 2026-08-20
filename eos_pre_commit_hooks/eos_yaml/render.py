@@ -29,11 +29,11 @@ def _cells(
 
     return ''.join(parts)
 
-def _row(cells: list[str], plan: AlignmentPlan, head: str, indent: int, closer: str) -> list[str]:
+def _row(cells: list[str], plan: AlignmentPlan, head: str, closer: str) -> list[str]:
     """One row of cells: `head` opens it, continuation sub-lines carry no bracket."""
     width = plan.wrap_w or len(cells)
     chunks = _chunk(cells, width)
-    continuation = ' ' * (indent + plan.value_column)
+    continuation = ' ' * plan.value_column
     lines = []
 
     for number, chunk in enumerate(chunks):
@@ -45,46 +45,49 @@ def _row(cells: list[str], plan: AlignmentPlan, head: str, indent: int, closer: 
 
     return lines
 
-def _head(field: FieldSpec, plan: AlignmentPlan, indent: int) -> str:
+def _head(field: FieldSpec, pad: int) -> str:
     """The key, its padding, and the bracket-work up to the field's first cell."""
     brackets = '[ ' if field.kind == 'vector' else '[ [ '
 
-    return ' ' * indent + field.key + ':' + ' ' * plan.key_pad[field.key] + brackets
+    return ' ' * field.indent + field.key + ':' + ' ' * pad + brackets
 
-def _render_field(field: FieldSpec, plan: AlignmentPlan, indent: int) -> list[str]:
+def _render_field(field: FieldSpec, plan: AlignmentPlan, pad: int) -> list[str]:
     if field.kind == 'vector':
-        return _row(field.cells, plan, _head(field, plan, indent), indent, ']')
+        return _row(field.cells, plan, _head(field, pad), ']')
 
     # The inner `[` of every row sits at the vector fields' bracket column; the outer
     # `[` two columns to its left, and the lone closing `]` under it.
-    inner = ' ' * (indent + plan.value_column - 2) + '[ '
+    inner = ' ' * (plan.value_column - 2) + '[ '
     lines = []
 
     for number, row in enumerate(field.rows):
         last = number == len(field.rows) - 1
-        head = _head(field, plan, indent) if number == 0 else inner
-        lines.extend(_row(row, plan, head, indent, ']' if last else '],'))
+        head = _head(field, pad) if number == 0 else inner
+        lines.extend(_row(row, plan, head, ']' if last else '],'))
 
-    lines.append(' ' * (indent + plan.value_column - 4) + ']')
+    lines.append(' ' * (plan.value_column - 4) + ']')
 
     return lines
 
-def render_group(fields: list[FieldSpec], plan: AlignmentPlan, indent: int) -> list[str]:
+def render_group(fields: list[FieldSpec], plan: AlignmentPlan) -> list[str]:
     """Emit the aligned text lines for one alignment group. Spec §4 steps 5-7.
-    See STEP-6.md."""
+    See STEP-6.md.
+
+    `plan.pad` and `plan.included` are indexed by position in `fields`, so a group
+    holding several same-named fields addresses each of them separately (§6)."""
     lines = []
 
-    for field in fields:
-        if field.key in plan.included:
-            lines.extend(_render_field(field, plan, indent))
+    for index, field in enumerate(fields):
+        if index in plan.included:
+            lines.extend(_render_field(field, plan, plan.pad[index]))
 
     return lines
 
-def render_self_aligned(field: FieldSpec, indent: int) -> list[str]:
+def render_self_aligned(field: FieldSpec) -> list[str]:
     """Emit a cap-excluded field's own lines, self-aligned only against its own
     rows (e.g. `kinematics`). Spec §4.4. See STEP-6.md."""
-    lines = [' ' * indent + field.key + ':']
-    marker = ' ' * (indent + 2) + '- '
+    lines = [' ' * field.indent + field.key + ':']
+    marker = ' ' * (field.indent + 2) + '- '
 
     if field.kind == 'vector':
         lines.extend(marker + cell for cell in field.cells)

@@ -13,6 +13,7 @@ from eos_pre_commit_hooks.eos_yaml.model import FieldSpec
 from tests.fixtures.worked_examples import (
     BIG_EXPECTED_EXCLUDED,
     BIG_EXPECTED_INCLUDED,
+    BIG_EXPECTED_KEYS,
     BIG_EXPECTED_WRAP_W,
     BIG_EXPECTED_WRAP_W_AT_150,
     BIG_FIELDS,
@@ -23,6 +24,10 @@ from tests.fixtures.worked_examples import (
     SMALL_PLAN,
 )
 
+def keys(fields, indices):
+    """The keys of `fields` at `indices`, so an index-keyed plan reads as names."""
+    return [fields[index].key for index in indices]
+
 # --- Part A: the two worked examples ---------------------------------------------
 
 def test_small_example_matches_its_plan_exactly():
@@ -32,6 +37,7 @@ def test_big_example_matches_structurally():
     plan = plan_alignment(BIG_FIELDS, [BIG_OBSERVABLE_CELL] * BIG_N)
 
     assert plan.included == BIG_EXPECTED_INCLUDED
+    assert keys(BIG_FIELDS, plan.included) == BIG_EXPECTED_KEYS
     assert plan.excluded == BIG_EXPECTED_EXCLUDED
     assert plan.wrap_w == BIG_EXPECTED_WRAP_W
     assert len(plan.column_widths) == BIG_N
@@ -86,9 +92,9 @@ def test_cap_boundary(name):
 
     plan = plan_alignment(fields, observables)
 
-    assert ('candidate' in plan.included) is expected
-    assert ('candidate' in plan.excluded) is not expected
-    assert plan.included[0] == 'observables'
+    assert ('candidate' in keys(fields, plan.included)) is expected
+    assert ('candidate' in keys(fields, plan.excluded)) is not expected
+    assert keys(fields, plan.included)[0] == 'observables'
 
 def test_a_field_excluded_by_the_cap_sets_no_column_width():
     observables = SHORT_OBSERVABLES
@@ -99,9 +105,9 @@ def test_a_field_excluded_by_the_cap_sets_no_column_width():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.excluded == ['kinematics']
+    assert keys(fields, plan.excluded) == ['kinematics']
     assert plan.column_widths == [10] * CAP_N
-    assert 'kinematics' not in plan.key_pad
+    assert plan.pad == [plan.pad[0], 0]
 
 def test_every_field_excluded_leaves_an_empty_grid():
     observables = ['x' * 5] * 3
@@ -110,9 +116,9 @@ def test_every_field_excluded_leaves_an_empty_grid():
     plan = plan_alignment(fields, observables)
 
     assert plan.included == []
-    assert plan.excluded == ['kinematics']
+    assert keys(fields, plan.excluded) == ['kinematics']
     assert plan.value_column == 0
-    assert plan.key_pad == {}
+    assert plan.pad == [0]
     assert plan.column_widths == []
     assert plan.wrap_w is None
 
@@ -129,10 +135,10 @@ def test_a_ragged_matrix_field_is_excluded():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.included == ['observables']
-    assert plan.excluded == ['covariance']
+    assert keys(fields, plan.included) == ['observables']
+    assert keys(fields, plan.excluded) == ['covariance']
     assert plan.column_widths == [5, 5, 5]
-    assert plan.key_pad == {'observables': 1}
+    assert plan.pad == [1, 0]
 
 def test_a_square_matrix_of_the_wrong_arity_is_excluded():
     observables = ['"obs"'] * 3
@@ -141,14 +147,15 @@ def test_a_square_matrix_of_the_wrong_arity_is_excluded():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.included == ['observables']
-    assert plan.excluded == ['correlations']
+    assert keys(fields, plan.included) == ['observables']
+    assert keys(fields, plan.excluded) == ['correlations']
 
 # --- Part D: wrapping -------------------------------------------------------------
 
-# One 'means:' field alone: value_column = len('means:') + label_gap + 2 = 9, so the
-# worst-case line is 2 + 9 + W * width + W * 2 + 1 = 12 + W * (width + 2). These cases
-# state the budget they were derived against instead of relying on the default.
+# One 'means:' field alone at indent 2: value_column = 2 + len('means:') + label_gap
+# + 2 = 11, so the worst-case line is 11 + W * width + W * 2 + 1 = 12 + W * (width + 2).
+# These cases state the budget they were derived against instead of relying on the
+# default.
 BUDGET = 150
 WRAP_OBSERVABLES = ['x' * 20] * 6               # cap = 20, threshold = 22
 
@@ -216,10 +223,10 @@ def test_a_matrix_only_group_needs_no_vector_field():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.included == ['covariance']
+    assert keys(fields, plan.included) == ['covariance']
     assert plan.excluded == []
-    assert plan.value_column == len('covariance:') + 1 + 4
-    assert plan.key_pad == {'covariance': 1}
+    assert plan.value_column == 2 + len('covariance:') + 1 + 4
+    assert plan.pad == [1]
     assert plan.column_widths == [10, 10, 10]
     assert plan.wrap_w is None
 
@@ -235,8 +242,8 @@ def test_included_and_excluded_keep_their_original_order():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.included == ['observables', 'means', 'covariance']
-    assert plan.excluded == ['wide_a', 'wide_b']
+    assert keys(fields, plan.included) == ['observables', 'means', 'covariance']
+    assert keys(fields, plan.excluded) == ['wide_a', 'wide_b']
 
 def test_a_matrix_field_borrows_two_columns_from_its_own_padding():
     observables = ['"obs"'] * 3
@@ -247,11 +254,60 @@ def test_a_matrix_field_borrows_two_columns_from_its_own_padding():
 
     plan = plan_alignment(fields, observables)
 
-    assert plan.value_column == len('means_too:') + 1 + 4
-    assert plan.key_pad['means_too'] == 1
-    assert plan.key_pad['means'] == plan.value_column - len('means:') - 2
+    assert plan.value_column == 2 + len('means_too:') + 1 + 4
+    assert plan.pad[1] == 1
+    assert plan.pad[0] == plan.value_column - 2 - len('means:') - 2
 
-# --- Part F: module hygiene -------------------------------------------------------
+# --- Part F: a group spanning two indent levels (spec §6) -------------------------
+
+def test_two_indent_levels_share_one_absolute_value_column():
+    """A Mixture entry's own fields sit at indent 2, its components' at indent 6."""
+    observables = ["'obs'"] * 5
+    fields = [
+        FieldSpec('observables', 'vector', cells=observables, indent=2),
+        FieldSpec('covariance', 'matrix', rows=[['+1.0e+00'] * 5] * 5, indent=6),
+    ]
+
+    plan = plan_alignment(fields, observables, reference_keys=REFERENCE_KEYS)
+
+    assert plan.included == [0, 1]
+    assert plan.value_column == 6 + len('covariance:') + 1 + 4
+
+    # each field's own first cell lands in that one column, counted from column zero
+    assert 2 + len('observables:') + plan.pad[0] + len('[ ') == plan.value_column
+    assert 6 + len('covariance:') + plan.pad[1] + len('[ [ ') == plan.value_column
+
+    assert all(pad >= 1 for pad in plan.pad)
+
+def test_the_deeper_field_can_be_the_one_that_sets_the_column():
+    fields = [
+        FieldSpec('observables', 'vector', cells=["'obs'"] * 3, indent=2),
+        FieldSpec('means', 'vector', cells=['+1.0e+00'] * 3, indent=6),
+    ]
+
+    plan = plan_alignment(fields, fields[0].cells, reference_keys=REFERENCE_KEYS)
+
+    # 'observables:' at indent 2 reaches column 17, 'means:' at indent 6 only 15
+    assert plan.value_column == 2 + len('observables:') + 1 + 2
+    assert plan.pad == [1, 3]
+
+def test_one_ragged_component_leaves_its_siblings_in_the_group():
+    """Spec §6: membership stays per field, so a name cannot address the group."""
+    observables = ["'obs'"] * 3
+    fields = [
+        FieldSpec('observables', 'vector', cells=observables, indent=2),
+        FieldSpec('means', 'vector', cells=['+1.0e+00'] * 3, indent=6),
+        FieldSpec('covariance', 'matrix', rows=[['+1.0e+00'] * 3] * 3, indent=6),
+        FieldSpec('means', 'vector', cells=['+2.0e+00'] * 3, indent=6),
+        FieldSpec('covariance', 'matrix', rows=[['+2.0e+00'] * 2] * 3, indent=6),
+    ]
+
+    plan = plan_alignment(fields, observables, reference_keys=REFERENCE_KEYS)
+
+    assert plan.included == [0, 1, 2, 3]
+    assert plan.excluded == [4]
+
+# --- Part G: module hygiene -------------------------------------------------------
 
 def test_module_imports_nothing_it_must_not():
     tree = ast.parse(pathlib.Path(alignment.__file__).read_text())
@@ -287,7 +343,7 @@ def test_a_narrow_reference_field_stays_in_the_group(budget, width):
     plan = plan_alignment(fields, fields[0].cells, max_line_width=budget,
                           reference_keys=REFERENCE_KEYS)
 
-    assert plan.included == ['observables', 'means']
+    assert keys(fields, plan.included) == ['observables', 'means']
     assert plan.excluded == []
 
 @pytest.mark.parametrize('budget, width', [(150, 43), (150, 63), (150, 90),
@@ -297,8 +353,8 @@ def test_a_reference_field_too_wide_for_three_columns_is_dropped(budget, width):
     plan = plan_alignment(fields, fields[0].cells, max_line_width=budget,
                           reference_keys=REFERENCE_KEYS)
 
-    assert plan.excluded == ['observables']
-    assert plan.included == ['means']
+    assert keys(fields, plan.excluded) == ['observables']
+    assert keys(fields, plan.included) == ['means']
 
 def test_the_next_reference_sets_the_cap_once_the_first_is_dropped():
     # observables is dropped, so the cap comes from means (8 chars) and not from the
@@ -311,14 +367,14 @@ def test_the_next_reference_sets_the_cap_once_the_first_is_dropped():
     plan = plan_alignment(fields, fields[0].cells, max_line_width=150,
                           reference_keys=REFERENCE_KEYS)
 
-    assert plan.included == ['means']
-    assert plan.excluded == ['observables', 'kinematics']
+    assert keys(fields, plan.included) == ['means']
+    assert keys(fields, plan.excluded) == ['observables', 'kinematics']
     assert plan.column_widths == [8, 8, 8, 8]
 
 def test_naming_no_reference_keys_keeps_the_original_behaviour():
     fields = [_observables(63), FieldSpec('means', 'vector', cells=['+1.0e+00'] * 4)]
 
-    assert plan_alignment(fields, fields[0].cells).included == ['observables', 'means']
+    assert plan_alignment(fields, fields[0].cells).included == [0, 1]
 
 
 # --- the cap spans every reference field, not just observables --------------------
@@ -331,7 +387,7 @@ def test_the_cap_is_wide_enough_for_every_reference_field():
     ]
     plan = plan_alignment(fields, fields[0].cells, reference_keys=REFERENCE_KEYS)
 
-    assert plan.included == ['observables', 'means']
+    assert keys(fields, plan.included) == ['observables', 'means']
     assert plan.excluded == []
 
 def test_a_reference_field_is_never_excluded_by_the_cap_it_sets():
@@ -354,8 +410,8 @@ def test_a_non_reference_field_is_still_capped_against_the_widest_reference():
     ]
     plan = plan_alignment(fields, fields[0].cells, reference_keys=REFERENCE_KEYS)
 
-    assert plan.included == ['observables', 'means']
-    assert plan.excluded == ['kinematics']
+    assert keys(fields, plan.included) == ['observables', 'means']
+    assert keys(fields, plan.excluded) == ['kinematics']
 
 def test_covariance_is_a_reference_and_so_never_excluded_by_the_cap():
     # modest means, full-precision covariance: the pairing that used to eject the matrix
@@ -366,7 +422,7 @@ def test_covariance_is_a_reference_and_so_never_excluded_by_the_cap():
     ]
     plan = plan_alignment(fields, fields[0].cells, reference_keys=REFERENCE_KEYS)
 
-    assert plan.included == ['observables', 'means', 'covariance']
+    assert keys(fields, plan.included) == ['observables', 'means', 'covariance']
     assert plan.excluded == []
 
 def test_the_floor_is_fifteen():
@@ -375,10 +431,11 @@ def test_the_floor_is_fifteen():
         _uniform('candidate', 17),
     ]
 
-    assert 'candidate' in plan_alignment(
-        fields, fields[0].cells, reference_keys=REFERENCE_KEYS).included
+    plan = plan_alignment(fields, fields[0].cells, reference_keys=REFERENCE_KEYS)
+
+    assert 'candidate' in keys(fields, plan.included)
 
     wider = [fields[0], _uniform('candidate', 18)]
+    plan = plan_alignment(wider, fields[0].cells, reference_keys=REFERENCE_KEYS)
 
-    assert 'candidate' in plan_alignment(
-        wider, fields[0].cells, reference_keys=REFERENCE_KEYS).excluded
+    assert 'candidate' in keys(wider, plan.excluded)

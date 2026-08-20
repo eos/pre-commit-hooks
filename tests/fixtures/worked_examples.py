@@ -8,17 +8,17 @@ from eos_pre_commit_hooks.eos_yaml.model import FieldSpec, AlignmentPlan
 # its value, which did not match; DESIGN.md §3.1 now states the rule the examples use.)
 
 SMALL_FIELDS = [
-    FieldSpec(key='observables', kind='vector', cells=['"foo"', '"bar"', '"baz"']),
-    FieldSpec(key='means', kind='vector', cells=['+1.0e-4', '-1.0', '+0.3']),
+    FieldSpec(key='observables', kind='vector', indent=0, cells=['"foo"', '"bar"', '"baz"']),
+    FieldSpec(key='means', kind='vector', indent=0, cells=['+1.0e-4', '-1.0', '+0.3']),
 ]
 SMALL_OBSERVABLE_CELLS = ['"foo"', '"bar"', '"baz"']
 
 SMALL_PLAN = AlignmentPlan(
-    value_column=15,
-    key_pad={'observables': 1, 'means': 7},
+    value_column=15,                 # absolute: indent 0 + 'observables:' 12 + gap 1 + '[ ' 2
+    pad=[1, 7],
     column_widths=[7, 5, 5],
     wrap_w=None,
-    included=['observables', 'means'],
+    included=[0, 1],
     excluded=[],
 )
 
@@ -88,8 +88,9 @@ BIG_FIELDS = [
 # AlignmentPlan literal, because the exact column_widths/value_column depend on
 # label_gap/column_gap/cap_slack, which are implementation defaults (DESIGN.md §3.1,
 # §3.3), not spec-mandated numbers:
-BIG_EXPECTED_INCLUDED = ['observables', 'options', 'means', 'covariance']
-BIG_EXPECTED_EXCLUDED = ['kinematics']
+BIG_EXPECTED_INCLUDED = [0, 1, 3, 4]   # observables, options, means, covariance
+BIG_EXPECTED_EXCLUDED = [2]            # kinematics
+BIG_EXPECTED_KEYS = ['observables', 'options', 'means', 'covariance']
 BIG_EXPECTED_WRAP_W = None   # at the 240-column budget all ten cells fit one line
 BIG_EXPECTED_WRAP_W_AT_150 = 5   # ceil(10/5) = 2 sub-lines, break after cell index 4
 

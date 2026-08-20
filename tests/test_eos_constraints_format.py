@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import shutil
 
 import pytest
@@ -170,6 +171,98 @@ def test_reference_entry_matches_the_worked_example():
     assert entry[entry.index('  kinematics:') + 1].startswith('    - {q2_min:')
     assert '+4.050e-03' in text and '+7.320e-10' in text
     assert max(len(line) for line in entry) <= 240
+
+# --- The Mixture entry's single alignment group (spec §6) -------------------------
+
+MIXTURE_ENTRY = 'ublnu::P(WET)@LMNRvD:2023A:'
+MIXTURE_VALUE_COLUMN = 22        # component `covariance:` at indent 6 sets it
+MIXTURE_COLUMN_WIDTH = 23
+MIXTURE_ARITY = 5
+MIXTURE_COMPONENTS = 7
+
+@pytest.fixture
+def mixture():
+    """The lines of `wet-constraints.yaml`'s one `type: Mixture` entry."""
+    text = pipeline.format_text((FIXTURES / 'wet-constraints.input.yaml').read_text())
+    lines = text.split('\n')
+    start = lines.index(MIXTURE_ENTRY)
+    end = next((index for index in range(start + 1, len(lines))
+                if lines[index].strip() and not lines[index][0].isspace()), len(lines))
+
+    return lines[start:end]
+
+def opens(line, key):
+    """Whether `line` opens a field named `key`, block-sequence marker and all."""
+    return line.strip().startswith((f'{key}:', f'- {key}:'))
+
+def openers(lines, key):
+    """Every line that opens a field named `key`."""
+    return [line for line in lines if opens(line, key)]
+
+def cell_starts(line):
+    """The column each top-level cell of a rendered field line begins at."""
+    first = line.rindex('[ ') + 2
+
+    return [first] + [first + match.end()
+                      for match in re.finditer(r', +', line[first:])]
+
+def test_the_mixture_entry_forms_one_group(mixture):
+    """17 fields: the entry's own three plus each component's `means`/`covariance`."""
+    fields = sum((openers(mixture, key) for key in
+                  ('observables', 'kinematics', 'options', 'means', 'covariance')), [])
+
+    assert len(fields) == 3 + 2 * MIXTURE_COMPONENTS
+    assert len(openers(mixture, 'means')) == MIXTURE_COMPONENTS
+
+    for line in fields:
+        prefix = '[ [ ' if opens(line, 'covariance') else '[ '
+        assert line.index(prefix) + len(prefix) == MIXTURE_VALUE_COLUMN, line
+
+def test_every_components_means_lines_up_with_the_entrys_observables(mixture):
+    observables, = openers(mixture, 'observables')
+
+    for line in openers(mixture, 'means'):
+        assert cell_starts(line) == cell_starts(observables)
+
+def test_the_mixture_group_shares_one_column_width(mixture):
+    observables, = openers(mixture, 'observables')
+    starts = cell_starts(observables)
+
+    assert len(starts) == MIXTURE_ARITY
+    assert [second - first for first, second in zip(starts, starts[1:])] == (
+        [MIXTURE_COLUMN_WIDTH + len(', ')] * (MIXTURE_ARITY - 1))
+
+def test_the_mixture_group_does_not_wrap(mixture):
+    """At arity 5 every field is one line, and every matrix row is one line."""
+    for line in openers(mixture, 'observables') + openers(mixture, 'means'):
+        assert line.count(',') == MIXTURE_ARITY - 1 and line.rstrip().endswith(']')
+
+    for line in openers(mixture, 'covariance'):
+        assert line.count(',') == MIXTURE_ARITY and line.rstrip().endswith('],')
+
+def test_the_widest_line_the_mixture_group_emits(mixture):
+    """`weights` is no group candidate (§7.1) and keeps its own, wider line."""
+    group = [line for line in mixture
+             if line.startswith(' ' * MIXTURE_VALUE_COLUMN)
+             or any(opens(line, key) for key in
+                    ('observables', 'kinematics', 'options', 'means', 'covariance'))]
+
+    assert max(len(line) for line in group) == 148
+
+NO_CANDIDATE_MIXTURE = '''\
+Some::Constraint@Author:2020A:
+    type: Mixture
+    observables: ['A', ['B']]
+    components:
+      - dof: 2
+'''
+
+def test_a_mixture_entry_with_no_candidate_field_anywhere():
+    """`observables` mixes a scalar with a sequence, so the entry forms no group."""
+    text = pipeline.format_text(NO_CANDIDATE_MIXTURE)
+
+    assert load(text) == load(NO_CANDIDATE_MIXTURE)
+    assert pipeline.format_text(text) == text
 
 # --- Part D: the command line -----------------------------------------------------
 
