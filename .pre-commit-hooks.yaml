@@ -16,3 +16,9 @@
     entry: eos-test-check-references
     language: python
     types: [text]
+-   id: eos-constraints-format
+    name: 'EOS: format constraint YAML'
+    description: Canonically formats eos/constraints/**/*.yaml (see the project's constraints-yaml style spec)
+    entry: eos-constraints-format
+    language: python
+    types: [yaml]
