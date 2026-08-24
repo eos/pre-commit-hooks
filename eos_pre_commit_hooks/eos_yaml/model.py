@@ -15,7 +15,7 @@ class FieldSpec:
     downstream of it never sees a raw float or a ruamel node.
 
     `indent` is the absolute column the field's own key starts at, so one group can
-    span two indent levels (spec §6).
+    span two indent levels (CONSTRAINTS-FORMAT.md §7).
     """
     key: str
     kind: Literal['vector', 'matrix']

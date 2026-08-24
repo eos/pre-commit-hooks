@@ -90,7 +90,7 @@ def _field_scope(value) -> _Scope:
     """The float format one sequence field's elements share.
 
     A matrix field's rows share the one scope; numbers inside a flow-mapping cell sit
-    outside it and keep their natural form. Spec §3.1.
+    outside it and keep their natural form. CONSTRAINTS-FORMAT.md §3.
     """
     values = []
 
@@ -112,7 +112,7 @@ def _field_scope(value) -> _Scope:
     return _Scope(widths=widths, promote=promote)
 
 def _with_plain_keys(node: CommentedMap) -> CommentedMap:
-    """`node` with every quoted key replaced by its plain text. Spec §3.2."""
+    """`node` with every quoted key replaced by its plain text. §4."""
     if not any(isinstance(key, ScalarString) for key in node):
         return node
 
@@ -127,7 +127,7 @@ def _with_plain_keys(node: CommentedMap) -> CommentedMap:
     return plain
 
 def _canonicalize(node, exponent_width: int, scope: _Scope | None = None):
-    """Rewrite every scalar below `node` into its final form. Spec §3.1, §3.2."""
+    """Rewrite every scalar below `node` into its final form. §3, §4."""
     if isinstance(node, CommentedMap):
         node = _with_plain_keys(node)
         for key in node:
@@ -359,7 +359,7 @@ def _specs(mapping, indent: int, arity: int) -> dict:
     return {key: _field_spec(key, mapping[key], indent, arity) for key in mapping}
 
 def _runs(keys: list[str], specs: dict) -> list[list[str]]:
-    """Maximal runs of adjacent candidate keys. Spec §4 step 1."""
+    """Maximal runs of adjacent candidate keys. §6."""
     runs: list[list[str]] = [[]]
 
     for key in keys:
@@ -371,7 +371,7 @@ def _runs(keys: list[str], specs: dict) -> list[list[str]]:
     return [run for run in runs if run]
 
 def _arity(entry) -> tuple[int, list[str]]:
-    """The entry's arity and its rendered `observables` cells. Spec §2."""
+    """The entry's arity and its rendered `observables` cells. §1."""
     value = entry.get(OBSERVABLES) if isinstance(entry, (CommentedMap, dict)) else None
 
     if not _is_sequence(value):
@@ -398,7 +398,7 @@ def _view(place: _Placement) -> tuple[list[FieldSpec], AlignmentPlan]:
     return [place.fields[place.index]], plan
 
 def _mixture_components(entry):
-    """A `Mixture` entry's components, or None for any other entry. Spec §6."""
+    """A `Mixture` entry's components, or None for any other entry. §7."""
     if entry.get('type') != MIXTURE or not _is_sequence(entry.get(COMPONENTS)):
         return None
 
@@ -421,7 +421,7 @@ def _placements(entry, indent: int, arity: int, observable_cells: list[str]) -> 
     """One plan per alignment group, keyed by the owning mapping and key.
 
     A `Mixture` entry forms a single group spanning two indent levels: its own
-    candidates plus every component's. Spec §4 step 1, §6.
+    candidates plus every component's. §6, §7.
     """
     placements: dict = {}
     specs = _specs(entry, indent, arity)
@@ -488,7 +488,7 @@ def _entry_lines(entry, indent: int, arity: int | None = None,
 
 def _component_lines(components, key: str, indent: int, arity: int,
                      observable_cells: list[str] | None, placements: dict) -> list[str]:
-    """A `Mixture` entry's components, sharing the entry's own alignment group. Spec §6."""
+    """A `Mixture` entry's components, sharing the entry's own alignment group. §7."""
     lines = [' ' * indent + key + ':']
 
     for component in components:
@@ -548,7 +548,7 @@ def _reindent_comments(text: str) -> str:
     return '\n'.join(lines)
 
 def format_text(text: str, filename: str = '<unknown>') -> str:
-    """The canonical form of one constraints file. See the project's style spec.
+    """The canonical form of one constraints file. See CONSTRAINTS-FORMAT.md.
 
     Raises `layout.FoldMarkerError` when the file's fold markers are unbalanced in a
     way that has no unambiguous repair; the caller must then leave the file alone.

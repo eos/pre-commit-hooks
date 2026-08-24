@@ -38,7 +38,7 @@ def format_float(
         exponent_width: int = 2,
         mantissa_width: int = 1,
 ) -> str:
-    """Canonical round-trip string for `value`. Spec §3.1. See STEP-2.md.
+    """Canonical round-trip string for `value`. CONSTRAINTS-FORMAT.md §3.
 
     The result is a pure function of the four arguments and always carries an
     explicit sign. Both widths are minima, never truncations: an exponent needing
@@ -63,7 +63,7 @@ def detect_notation(raw_text: str) -> Notation:
     return 'scientific' if 'e' in raw_text or 'E' in raw_text else 'fixed'
 
 def required_exponent_width(value: float) -> int:
-    """2, unless |decimal exponent| >= 100, in which case 3. Spec §3.1/§7.3."""
+    """2, unless |decimal exponent| >= 100, in which case 3. §3."""
     _, _, exponent = _decompose(value)
 
     return 3 if abs(exponent) >= 100 else 2
@@ -73,7 +73,7 @@ def entry_exponent_width(values: list[float]) -> int:
     return 3 if any(required_exponent_width(value) == 3 for value in values) else 2
 
 def mantissa_width(values: list[float], notation: Notation) -> int:
-    """Fractional digits shared by every element of one sequence field. Spec §3.1.
+    """Fractional digits shared by every element of one sequence field. §3.
 
     The max over the values' shortest round-tripping forms, floored at 1 — the
     mandatory fractional digit means no shortest form ever contributes 0.

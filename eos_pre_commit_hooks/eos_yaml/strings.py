@@ -7,7 +7,7 @@ def quote(value: str):
 
     Returns a ruamel.yaml ScalarString subclass instance (SingleQuotedScalarString
     or DoubleQuotedScalarString) — the caller dumps it with ruamel, which handles
-    any necessary escaping itself. Spec §3.2/§7.4. See STEP-3.md.
+    any necessary escaping itself. CONSTRAINTS-FORMAT.md §4.
     """
     if "'" in value:
         return DoubleQuotedScalarString(value)

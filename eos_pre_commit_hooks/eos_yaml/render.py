@@ -70,8 +70,7 @@ def _render_field(field: FieldSpec, plan: AlignmentPlan, pad: int) -> list[str]:
     return lines
 
 def render_group(fields: list[FieldSpec], plan: AlignmentPlan) -> list[str]:
-    """Emit the aligned text lines for one alignment group. Spec §4 steps 5-7.
-    See STEP-6.md.
+    """Emit the aligned text lines for one alignment group. CONSTRAINTS-FORMAT.md §6.
 
     `plan.pad` and `plan.included` are indexed by position in `fields`, so a group
     holding several same-named fields addresses each of them separately (§6)."""
@@ -85,7 +84,7 @@ def render_group(fields: list[FieldSpec], plan: AlignmentPlan) -> list[str]:
 
 def render_self_aligned(field: FieldSpec) -> list[str]:
     """Emit a cap-excluded field's own lines, self-aligned only against its own
-    rows (e.g. `kinematics`). Spec §4.4. See STEP-6.md."""
+    rows (e.g. `kinematics`). §6."""
     lines = [' ' * field.indent + field.key + ':']
     marker = ' ' * (field.indent + 2) + '- '
 

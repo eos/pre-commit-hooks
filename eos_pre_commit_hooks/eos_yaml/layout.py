@@ -49,7 +49,7 @@ def _chunk_starts(lines: list[str]) -> list[int]:
 
 def normalize_blank_lines(text: str) -> str:
     """Collapse/expand blank-line runs between top-level constraint entries to
-    exactly one. Spec §3.3. See STEP-4.md."""
+    exactly one. CONSTRAINTS-FORMAT.md §2."""
     lines = text.splitlines(keepends=True)
     starts = _chunk_starts(lines)
 
@@ -76,7 +76,7 @@ def _fold_marker_error(filename: str, index: int, reason: str) -> FoldMarkerErro
 
 def check_and_repair_fold_markers(text: str, filename: str = '<unknown>') -> str:
     """Validate/repair vim foldmarker nesting; raise FoldMarkerError if ambiguous.
-    Spec §3.5. See STEP-4.md.
+    CONSTRAINTS-FORMAT.md §5.
 
     Every injection is recorded first and applied only once the whole file has been
     scanned, so a raise leaves `text` untouched.

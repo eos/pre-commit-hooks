@@ -13,7 +13,7 @@ def _natural_cell_width(field: FieldSpec) -> int:
     return max((len(cell) for row in _rows(field) for cell in row), default=0)
 
 def _is_ragged(field: FieldSpec, arity: int) -> bool:
-    """A matrix field whose rows do not all hold `arity` cells. Spec §5."""
+    """A matrix field whose rows do not all hold `arity` cells. §6."""
     return field.kind == 'matrix' and any(len(row) != arity for row in field.rows)
 
 def _bracket_prefix_len(field: FieldSpec) -> int:
@@ -46,7 +46,7 @@ def _three_column_width(
     """The widest cell that still leaves room for three columns on one line.
 
     A reference field wider than this cannot set the grid's columns without
-    squeezing the group down to one or two cells per line. Spec §4.4.
+    squeezing the group down to one or two cells per line. §6.
     """
     fixed = (indent + len('[ ') + len(' ]') + len(key) + 1 + label_gap
              + 2 * (1 + column_gap))
@@ -60,7 +60,7 @@ def _reference_width(
     """The cell width the cap is measured against, and any reference fields dropped.
 
     Every field named in `reference_keys` contributes its own width, so the cap is
-    wide enough for all of them at once and none can be excluded by it — spec §4.4's
+    wide enough for all of them at once and none can be excluded by it — §6's
     `max(15, obslenmax, meanslenmax)`. A reference too wide to leave three columns per
     line contributes nothing and is dropped from the group instead. With no candidates
     present the width comes from `observable_cells`, preserving the behaviour of a
@@ -95,9 +95,8 @@ def plan_alignment(
         cap_slack: int = 2,
         reference_keys: tuple[str, ...] = (),
 ) -> AlignmentPlan:
-    """Group vector/matrix fields, apply the §4.4 cap (with `cap_slack` — see
-    DESIGN.md §3.3), compute column widths and wrap width. Spec §4, §4.4, §7.1.
-    See STEP-5.md.
+    """Group vector/matrix fields, apply the width cap (with `cap_slack`),
+    compute column widths and wrap width. CONSTRAINTS-FORMAT.md §2, §6.
 
     `fields` is one alignment group's fields, in the order they are emitted; the
     caller has already established the shared arity, which is `len(observable_cells)`.
