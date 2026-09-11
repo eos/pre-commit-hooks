@@ -22,3 +22,9 @@
     entry: eos-constraints-format
     language: python
     types: [yaml]
+-   id: eos-notebooks-no-output
+    name: 'EOS: notebooks free of output'
+    description: Checks that Jupyter notebooks carry no stored cell outputs or prompt numbers
+    entry: eos-notebooks-no-output
+    language: python
+    types: [jupyter]
